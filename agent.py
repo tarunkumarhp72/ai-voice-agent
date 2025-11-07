@@ -1,5 +1,5 @@
 from livekit import agents, rtc, api
-from livekit.plugins import openai, elevenlabs, silero
+from livekit.plugins import openai, elevenlabs, silero, groq
 import asyncio
 import os
 import yaml
@@ -19,24 +19,36 @@ with open(prompt_path, "r", encoding="utf-8") as f:
 # Extract the DENTALCLINIC persona
 dental_persona = prompts.get("DENTALCLINIC", {})
 DENTAL_PROMPT = dental_persona.get("Prompt", "You are an AI receptionist.")
-DENTAL_TEMP = dental_persona.get("Temperature", 0.4)
 
 # -----------------------------
-# 🎧 LiveKit Agent Entrypoint
+#  LiveKit Agent Entrypoint
 # -----------------------------
 async def entrypoint(ctx: agents.JobContext):
     print("Agent started — ready to join LiveKit room")
 
     # Connect to LiveKit
     await ctx.connect()
+    
+    voice_config = {
+        "id": os.getenv("VOICE_ID", "cgSgspJ2msm6clMCkdW9"),
+        "model": os.getenv("VOICE_MODEL", "eleven_turbo_v2"),
+        "stability": float(os.getenv("VOICE_STABILITY", 0.5)),
+        "similarity_boost": float(os.getenv("VOICE_SIMILARITY", 0.75)),
+        "speed": float(os.getenv("VOICE_SPEED", 1.0)),
+    }
 
     # -----------------------------
-    # 🗣️ TTS Setup with fallback
+    #  TTS Setup with fallback
     # -----------------------------
     try:
         tts_engine = elevenlabs.TTS(
-            voice_id="JBFqnCBsd6RMkjVDRZzb",  
-            model="eleven_turbo_v2"
+            voice_id=voice_config["id"],
+            model=voice_config["model"],
+            voice_settings=elevenlabs.VoiceSettings(
+                stability=voice_config["stability"],
+                similarity_boost=voice_config["similarity_boost"],
+                speed=voice_config["speed"],
+            ),
         )
         print("ElevenLabs TTS loaded successfully")
     except Exception as e:
@@ -47,8 +59,15 @@ async def entrypoint(ctx: agents.JobContext):
     #  Create Session
     # -----------------------------
     session = agents.AgentSession(
-        stt=openai.STT(model="gpt-4o-transcribe"),
-        llm=openai.LLM(model="gpt-4o-mini", temperature=DENTAL_TEMP),
+        stt=openai.STT(
+            model="gpt-4o-transcribe",
+            prompt=f"""
+            This is a conversation between you (an AI receptionist for a dental clinic) and a patient or potential patient regarding appointment booking and questions. Transcribe accurately in English with correct punctuation and formatting. In rare cases there may be other languages than English, so be prepared for that, but expect English.
+            """),
+        llm=groq.LLM(
+            model="moonshotai/kimi-k2-instruct", 
+            temperature=dental_persona.get("Temperature", 0.4)
+            ),
         tts=tts_engine,
         vad=silero.VAD.load(),
     )
