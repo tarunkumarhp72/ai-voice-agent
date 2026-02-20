@@ -1,0 +1,11 @@
+python-dotenv
+livekit-agents[openai, silero, turn-detector, elevenlabs, groq, deepgram, cartesia, assemblyai, rime]~=1.0
+livekit-plugins-noise-cancellation~=0.2
+PyYAML
+qdrant-client
+aiohttp
+httpio
+sentence-transformers
+textual
+pyinstaller
+pytz
